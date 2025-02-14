@@ -1,33 +1,29 @@
 import apis
 import os
 from utility import pretty_print
-from vwap_model import CaseData
-from model import OrderRequest, OrderResponse, OrderStatus
+from models import CaseDataResponse, OrderRequest, OrderResponse, OrderStatus
+from vwap_models import TradeConfig
 import time
 import sys
-from dotenv import load_dotenv  # type: ignore
 
 class VWAPStrategy:
-    def __init__(self, ticker, number_of_shares_to_fill=100000, number_of_trades=10, action="BUY"):
-        # Load environment variables from .env file
-        load_dotenv()
-
+    def __init__(self, config: TradeConfig):
         # Authentication details
         self.auth = {
-            "username": os.getenv("USERNAME"),
-            "password": os.getenv("PASSWORD"),
-            "server": os.getenv("SERVER"),
-            "port": os.getenv("PORT"),
+            "username": config.username,
+            "password": config.password,
+            "server": config.server,
+            "port": config.port,
         }
 
         # Initialize strategy parameters
-        self.ticker = ticker
-        self.number_of_shares_to_fill = number_of_shares_to_fill
-        self.number_of_trades = number_of_trades
-        self.action = action
+        self.ticker = config.ticker
+        self.number_of_shares_to_fill = config.number_of_shares_to_fill
+        self.number_of_trades = config.number_of_trades
+        self.action = config.action
 
         # Fetch case data
-        case_data = CaseData.model_validate(apis.query_case_status(self.auth))
+        case_data = CaseDataResponse.model_validate(apis.query_case_status(self.auth))
         self.current_tick = case_data.tick
         self.ticks_per_period = case_data.ticks_per_period
 
@@ -64,7 +60,15 @@ class VWAPStrategy:
         if is_order_detail_allowed:
             pretty_print(order_detail)
 
+    def is_trading_active(self):
+        case_data = CaseDataResponse.model_validate(apis.query_case_status(self.auth))
+        return case_data.status == "ACTIVE"
+
     def start(self, is_order_detail_allowed=True):
+        if not self.is_trading_active():
+            sys.stdout.write(f"\rTrading is not active\n")
+            return 
+
         for i in range(0, self.number_of_trades):
             self.execute_trade(i, is_order_detail_allowed)
 

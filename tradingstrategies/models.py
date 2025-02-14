@@ -87,4 +87,16 @@ class OrdersParams(BaseModel):
     class Config:
         str_strip_whitespace = True  # Strips extra whitespace from string fields
 
+class CaseStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "PAUSED"
+    COMPLETED = "STOPPED"
 
+class CaseDataResponse(BaseModel):
+    name: str
+    period: int
+    tick: int
+    ticks_per_period: int
+    total_periods: int
+    status: CaseStatus
+    is_enforce_trading_limits: bool

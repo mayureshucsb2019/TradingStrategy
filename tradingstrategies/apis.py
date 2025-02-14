@@ -1,7 +1,11 @@
 import requests
 from utility import make_encoded_header
 from typing import Optional
-from model import AuthConfig, OrderRequest, OHLCParams, TimeSalesParams, OrderStatus
+from tradingstrategies.models import AuthConfig, CaseDataResponse, OrderRequest, OHLCParams, TimeSalesParams, OrderStatus
+
+def get_current_tick(auth: AuthConfig):
+    case_data = CaseDataResponse.model_validate(query_case_status(auth))
+    return case_data.tick
 
 def query_case_status(auth: AuthConfig):
     """Queries the case status API."""
@@ -298,3 +302,4 @@ def query_lease_details(auth: AuthConfig, lease_id):
     except requests.exceptions.RequestException as e:
         print(f"Error querying lease details for {lease_id}: {e}")
         return None
+

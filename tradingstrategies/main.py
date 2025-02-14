@@ -1,12 +1,14 @@
 import os
 from utility import pretty_print
 from vwap_strategy import VWAPStrategy
+from vwap_models import TradeConfig, TradeAction
+import apis
 from dotenv import load_dotenv # type: ignore
 
 # Load environment variables from .env file
 load_dotenv()
 
-# # Read values from .env
+# Read values from .env
 # auth = {
 #     "username": os.getenv("USERNAME"),
 #     "password": os.getenv("PASSWORD"),
@@ -35,11 +37,17 @@ load_dotenv()
 # case_data = apis.query_security_history(auth)
 # pretty_print(case_data)
 
-# Example Usage:
-vwap = VWAPStrategy(
-    ticker="TNX",
-    number_of_shares_to_fill=100000,
-    number_of_trades=10,
-    action="BUY"
+# Example VWAP Usage:
+config = TradeConfig(
+    username=os.getenv("USERNAME"),  
+    password=os.getenv("PASSWORD"),
+    server=os.getenv("SERVER"),
+    port=int(os.getenv("PORT")),  
+    ticker=os.getenv("VWAP_TICKER"),
+    number_of_shares_to_fill=int(os.getenv("VWAP_SHARES_TO_FILL")),
+    number_of_trades=int(os.getenv("VWAP_TRADES")),
+    action=os.getenv("VWAP_TRADE_ACTION")
 )
+
+vwap = VWAPStrategy(config=config)
 vwap.start()
