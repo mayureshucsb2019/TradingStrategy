@@ -72,7 +72,7 @@ def generate_market_depth(ticker: str):
         )
     return table
 
-def generate_signal(ticker: str, price: float, action: str, quantity: int):
+def generate_signal(ticker: str, price: float, action: str, quantity: int, margin: float =0.0):
     # Generate the market depth table
     market_depth_table = generate_market_depth(ticker)
     # console.print(market_depth_table)
@@ -95,7 +95,7 @@ def generate_signal(ticker: str, price: float, action: str, quantity: int):
             bid_vwap_at_quantity = bid_vwap_list[0]  # Best possible VWAP (top bid)
 
         # Check if the price is favorable for selling
-        if price > bid_vwap_at_quantity:
+        if price - margin > bid_vwap_at_quantity:
             return (True, bid_vwap_at_quantity)
         return (False, bid_vwap_at_quantity)
 
@@ -113,7 +113,7 @@ def generate_signal(ticker: str, price: float, action: str, quantity: int):
             ask_vwap_at_quantity = ask_vwap_list[0]  # Best possible VWAP (top ask)
 
         # Check if the price is favorable for buying
-        if price < ask_vwap_at_quantity:
+        if price + margin < ask_vwap_at_quantity:
             return (True, ask_vwap_at_quantity)
         return (False, ask_vwap_at_quantity)
 
@@ -130,7 +130,7 @@ while True:
         if tender_response:
             print(tender_response)
     for tender in tender_response:
-        signal_response = generate_signal(tender["ticker"], tender["price"], tender["action"], tender["quantity"])
+        signal_response = generate_signal(tender["ticker"], tender["price"], tender["action"], tender["quantity"], float(os.getenv("T3_MIN_PROFIT_MARGIN")))
         print(f"Signal is {signal_response}")
         if signal_response[0]:
             tender_response = apis.post_tender(auth, tender['tender_id'], tender['price'])
