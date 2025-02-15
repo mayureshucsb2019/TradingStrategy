@@ -7,6 +7,10 @@ def get_current_tick(auth: AuthConfig):
     case_data = CaseDataResponse.model_validate(query_case_status(auth))
     return case_data.tick
 
+def trading_status(self):
+    case_data = CaseDataResponse.model_validate(query_case_status(self.auth))
+    return case_data.status
+
 def query_case_status(auth: AuthConfig):
     """Queries the case status API."""
     api_endpoint = f"http://{auth["server"]}:{auth["port"]}/v1/case"
@@ -113,11 +117,12 @@ def query_securities(auth: AuthConfig, ticker: str =None):
         print(f"Error querying securities: {e}")
         return None
 
-def query_security_order_book(auth: AuthConfig, ticker: str):
+def query_security_order_book(auth: AuthConfig, ticker: str, limit: int = 20):
     """Queries order book for securities."""
     api_endpoint = f"http://{auth["server"]}:{auth["port"]}/v1/securities/book"
     params = {
-            "ticker": ticker
+            "ticker": ticker,
+            "limit":limit
         }
     try:
         headers = make_encoded_header(auth["username"], auth["password"])
@@ -218,9 +223,8 @@ def post_order(auth: AuthConfig, order_details: OrderRequest):
             raise ValueError("Price must be specified for LIMIT orders.")
         params["price"] = order_details.price
 
-    headers = make_encoded_header(auth["username"], auth["password"])
-
     try:
+        headers = make_encoded_header(auth["username"], auth["password"])
         response = requests.post(url, headers=headers, params=params)
         response.raise_for_status()
         return response.json()
@@ -228,6 +232,43 @@ def post_order(auth: AuthConfig, order_details: OrderRequest):
         print(f"Error placing order: {e}")
         return None
 
+def chunk_order(auth: AuthConfig, order_details: OrderRequest):
+    quantity = order_details.quantity
+    while True:
+        if quantity >= 10000:
+            order_details.quantity = 10000
+            quantity -= 10000
+        elif quantity > 0 and quantity < 10000:
+            order_details.quantity = quantity
+            quantity = 0
+        else:
+            break
+        post_order(auth, order_details)
+
+def square_off_ticker(auth: AuthConfig, ticker: str):
+    securities_data = query_securities(auth, ticker)
+    while int(securities_data[0]["position"]) != 0:
+        if securities_data[0]["position"] > 0 :
+            action = "SELL"
+        else:
+            action = "BUY"
+
+        if abs(securities_data[0]["position"]) > 10000:
+            quantity = 10000
+        else:
+            quantity = abs(securities_data[0]["position"])
+        
+        order_details = OrderRequest(
+                        ticker=ticker,
+                        type="MARKET",
+                        quantity=quantity,
+                        action=action,
+                        dry_run=0
+                    )        
+        post_order(auth, order_details)
+        securities_data = query_securities(auth, ticker)
+    print(f"Trade for {ticker} squared off")
+        
 def query_order_details(auth: AuthConfig, order_id:int):
     """Queries specific order details."""
     api_endpoint = f"http://{auth["server"]}:{auth["port"]}/v1/orders/{order_id}"
@@ -267,6 +308,58 @@ def cancel_order(auth: AuthConfig, order_id: int):
         print(f"Error during API request: {e}")
         return None
 
+def post_tender(auth: AuthConfig, tender_id: int, price: float):
+    """
+    Accept a tender offer with the given price.
+    
+    Args:
+        auth: AuthConfig model containing authentication details.
+        tender_id: The ID of the tender.
+        price: The bid price for the tender.
+        
+    Returns:
+        The JSON response from the API if successful, otherwise None.
+    """
+    api_endpoint = f"http://{auth["server"]}:{auth["port"]}/v1/tenders/{tender_id}"
+    params = {"price": price}
+    
+    try:
+        headers = make_encoded_header(auth["username"], auth["password"])  
+        response = requests.post(api_endpoint, headers=headers, params=params)
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        
+        return response.json()
+    
+    except requests.exceptions.RequestException as e:
+        print(f"Error during API request: {e}")
+        return None
+
+def decline_tender(auth: AuthConfig, tender_id: int):
+    """
+    Decline a tender offer with the given tender ID.
+    
+    Args:
+        auth: AuthConfig model containing authentication details.
+        tender_id: The ID of the tender to decline.
+        
+    Returns:
+        The JSON response from the API if successful, otherwise None.
+    """
+    api_endpoint = f"http://{auth["server"]}:{auth["port"]}/v1/tenders/{tender_id}"
+    
+    try:
+        headers = make_encoded_header(auth["username"], auth["password"])  
+        response = requests.delete(api_endpoint, headers=headers)
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Error during API request: {e}")
+        return None
+
+def is_tender_processed(auth: AuthConfig, ticker: str):
+    securities_data = query_securities(auth, ticker)
+    return securities_data[0]["position"] != 0.0
+
 def query_tenders(auth: AuthConfig):
     """Queries all active tenders."""
     api_endpoint = f"http://{auth["server"]}:{auth["port"]}/v1/tenders"
@@ -302,4 +395,3 @@ def query_lease_details(auth: AuthConfig, lease_id):
     except requests.exceptions.RequestException as e:
         print(f"Error querying lease details for {lease_id}: {e}")
         return None
-

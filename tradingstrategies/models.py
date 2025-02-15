@@ -73,7 +73,7 @@ class TimeSalesParams(BaseModel):
         str_min_length = 1  # Ensures that the ticker is not empty
         str_strip_whitespace = True  # Strips extra whitespace
 
-class OrderStatus(Enum):
+class OrderStatus(str, Enum):
     OPEN = "OPEN"
     TRANSACTED = "TRANSACTED"
     CANCELLED = "CANCELLED"
