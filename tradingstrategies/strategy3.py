@@ -75,7 +75,7 @@ def generate_market_depth(ticker: str):
 def generate_signal(ticker: str, price: float, action: str, quantity: int, margin: float =0.0):
     # Generate the market depth table
     market_depth_table = generate_market_depth(ticker)
-    # console.print(market_depth_table)
+    console.print(market_depth_table)
 
     # Convert generator to list
     bid_vwap_list = [float(cell) for cell in market_depth_table.columns[0].cells]
@@ -140,5 +140,5 @@ while True:
                     print("waiting for tender to be processed")            
                 apis.square_off_ticker(auth, tender["ticker"])
         else:
-            print(f"Tender declined: {apis.decline_tender(auth, tender_response['tender_id'])}")
+            print(f"Tender declined: {apis.decline_tender(auth, tender['tender_id'])}")
     time.sleep(1)
