@@ -1,6 +1,6 @@
-import time, os, apis, sys
-from rich.console import Console
-from rich.table import Table
+import time, os, apis, asyncio
+from rich.console import Console # type: ignore
+from rich.table import Table # type: ignore
 from dotenv import load_dotenv # type: ignore
 
 # Console setup for terminal output
@@ -125,20 +125,23 @@ tickers = ["CRZY", "TAME"]
 # Live updating Market Depth tables for each ticker
 while True:
     tender_response = []
+    # accept no tenders after the mantioned tick value
     if apis.get_current_tick(auth) <= int(os.getenv("T3_TRADE_UNTIL_TICK")):
         tender_response = apis.query_tenders(auth)
         if tender_response:
             print(tender_response)
     for tender in tender_response:
         signal_response = generate_signal(tender["ticker"], tender["price"], tender["action"], tender["quantity"], float(os.getenv("T3_MIN_PROFIT_MARGIN")))
+        action = "BUY" if tender["action"] == "BUY" else "SELL"
         print(f"Signal is {signal_response}")
         if signal_response[0]:
             tender_response = apis.post_tender(auth, tender['tender_id'], tender['price'])
             if tender_response["success"]:
                 while not apis.is_tender_processed(auth, tender["ticker"]):
                     time.sleep(0.1)
-                    print("waiting for tender to be processed")            
-                apis.square_off_ticker(auth, tender["ticker"])
+                    print("waiting for tender to be processed")
+                asyncio.create_task(apis.stop_loss_square_off_ticker(auth, tender["tender_id"], tender["ticker"], signal_response[1], tender["quantity"], action, loss_percent=0.1, batch_size=5000))             
+                apis.instant_square_off_ticker(auth, tender["ticker"])
         else:
             print(f"Tender declined: {apis.decline_tender(auth, tender['tender_id'])}")
     time.sleep(1)

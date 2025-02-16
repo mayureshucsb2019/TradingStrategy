@@ -32,7 +32,7 @@ auth = {
 # case_data = apis.query_asset_history(auth)
 # pretty_print(case_data)
 
-securities_data = apis.query_securities(auth)
+securities_data = apis.query_securities(auth,"CRZY")
 print(securities_data)
 
 # print("Securities book data")
