@@ -26,7 +26,6 @@ print(f"Hyper parameters are\n"+
       f"T3_MIN_PROFIT_MARGIN:{T3_MIN_PROFIT_MARGIN}\n"+
       f"T3_TRADE_UNTIL_TICK:{T3_TRADE_UNTIL_TICK}\n"+
       f"T3_MIN_VWAP_MARGIN:{T3_MIN_VWAP_MARGIN}\n"+
-      f"T3_MIN_VWAP_MARGIN:{T3_MIN_VWAP_MARGIN}\n"
       f"T3_STOP_LOSS_PERCENT:{T3_STOP_LOSS_PERCENT}\n"+
       f"T3_BATCH_SIZE:{T3_BATCH_SIZE}")
 
@@ -146,15 +145,20 @@ async def main():
                 T3_MIN_VWAP_MARGIN
             )
             # reverse the action to that of tender, as we need to square off 
-            squreoff_action = "SELL" if tender["action"] == "BUY" else "BUY"
+            squareoff_action = "SELL" if tender["action"] == "BUY" else "BUY"
             print(f"Signal analysed: \n{signal_response}")
-
             if signal_response[0]:
                 securities_data = apis.query_securities(AUTH)
+                secutity_position = {}
                 total_position = 0
                 for security in securities_data:
-                    total_position += abs(security["position"])
-                if total_position + tender["quantity"] > 100000:
+                    secutity_position[tender["ticker"]] = security["position"]
+                    if tender["ticker"] == security["ticker"]:
+                        tender_quantity = -1*tender["quantity"] if tender["action"] == "SELL" else tender["quantity"]
+                        secutity_position[tender["ticker"]] += tender_quantity
+                    total_position +=abs(secutity_position[tender["ticker"]])
+                    
+                if total_position > 100000:
                     print(f"Cannot accept this tender ${tender} without squaring off earlier ones")
                     print(f"Tender declined: {apis.decline_tender(AUTH, tender['tender_id'])}")
                     break
@@ -165,18 +169,18 @@ async def main():
                         await asyncio.sleep(0.1)  # Use async sleep
                         print("waiting for tender to be processed")
 
-                    squreoff_price = tender["price"] - T3_MIN_PROFIT_MARGIN if squreoff_action == "BUY" else tender["price"] + T3_MIN_PROFIT_MARGIN
+                    profit_price = tender["price"] - T3_MIN_PROFIT_MARGIN if squareoff_action == "BUY" else tender["price"] + T3_MIN_PROFIT_MARGIN
+                    stoploss_price = tender["price"] *(1+T3_STOP_LOSS_PERCENT) if squareoff_action == "BUY" else tender["price"] *(1-T3_STOP_LOSS_PERCENT)
                     # Schedule async task properly
-                    # asyncio.create_task(
-                    #     apis.stop_loss_square_off_ticker(AUTH, tender["tender_id"], tender["ticker"],
-                    #                                      squreoff_price, tender["quantity"], squreoff_action,
-                    #                                      loss_percent=T3_STOP_LOSS_PERCENT, batch_size=T3_BATCH_SIZE)
-                    # )
+                    asyncio.create_task(
+                        apis.stop_loss_square_off_ticker(AUTH, tender["tender_id"], tender["ticker"],
+                                                         profit_price, tender["quantity"], squareoff_action,
+                                                         stoploss_price=stoploss_price, batch_size=T3_BATCH_SIZE,square_off_time=295)
+                    )
                     # Uncomment this below line if you are choosing this strategy, and comment earlier line
-                    apis.instant_square_off_ticker(AUTH, tender["ticker"],T3_BATCH_SIZE)             
+                    # apis.instant_square_off_ticker(AUTH, tender["ticker"],T3_BATCH_SIZE)             
             else:
                 print(f"Tender declined: {apis.decline_tender(AUTH, tender['tender_id'])}")
-
         await asyncio.sleep(1)  # Use async sleep
 
 # Run the event loop properly
