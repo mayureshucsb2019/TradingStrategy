@@ -248,7 +248,7 @@ def chunk_order(auth: AuthConfig, order_details: OrderRequest):
             break
         post_order(auth, order_details)
 
-def instant_square_off_ticker(auth: AuthConfig, ticker: str):
+def instant_square_off_ticker(auth: AuthConfig, ticker: str, batch_size: int = 10000):
     securities_data = query_securities(auth, ticker)
     while int(securities_data[0]["position"]) != 0:
         if securities_data[0]["position"] > 0 :
@@ -256,8 +256,8 @@ def instant_square_off_ticker(auth: AuthConfig, ticker: str):
         else:
             action = "BUY"
 
-        if abs(securities_data[0]["position"]) > 10000:
-            quantity = 10000
+        if abs(securities_data[0]["position"]) > batch_size:
+            quantity = batch_size
         else:
             quantity = abs(securities_data[0]["position"])
         
@@ -272,25 +272,28 @@ def instant_square_off_ticker(auth: AuthConfig, ticker: str):
         securities_data = query_securities(auth, ticker)
     print(f"Trade for {ticker} squared off")
 
-async def stop_loss_square_off_ticker(auth: AuthConfig, tender_id: int, ticker: str, vwap_price: float, quantity: int, action: str, loss_percent: float = 0.1, batch_size: int = 5000):
-    print(f"Started process for Tender-{tender_id}")
+async def stop_loss_square_off_ticker(auth: AuthConfig, tender_id: int, ticker: str, squareoff_price: float, quantity: int, action: str, loss_percent: float = 0.1, batch_size: int = 5000):
+    print(f"Started process for Tender-{tender_id} ticker:{ticker} action:{action } squareoff:{squareoff_price}")
+    await asyncio.sleep(1)
+    if ticker not in ticker_locks:
+        ticker_locks[ticker] = asyncio.Lock()  # Create a lock only if it doesn't exist
+        print(f"Lock created for Tender-{tender_id} ticker {ticker}")
+    else:
+        print(f"Lock exists for Tender-{tender_id} ticker {ticker}")
     while quantity > 0:
         if get_current_tick(auth) >= 297: 
-            if ticker not in ticker_locks:
-                ticker_locks[ticker] = asyncio.Lock()  # Create a lock only if it doesn't exist
-                print(f"Lock created for Tender-{tender_id} ticker {ticker}")
-            else:
-                print(f"Lock exists for Tender-{tender_id} ticker {ticker}")
             # acquire lock so that two process of same ticker shouldn't square off at the same time
             async with ticker_locks[ticker]:
-                instant_square_off_ticker(auth, ticker)
+                instant_square_off_ticker(auth, ticker, batch_size)
                 print(f"Instant square off of Tender-{tender_id} ticker {ticker} as time limit reached")
             break
         # Get the last price of ticker to make a stop loss decision
-        last_price = query_securities(auth,"CRZY")[0]["last"]      
+        last_price = query_securities(auth,ticker)[0]["last"]   
+        # print(f"Last price for Tender-{tender_id} ticker:{ticker} action:{action } squareoff:{squareoff_price} last:{last_price}")   
         if action == "SELL":
             # Stop loss so SELL all remaining quantity that you did BUY earlier
-            if vwap_price * loss_percent >= vwap_price - last_price:
+            if last_price <= squareoff_price * (1 - loss_percent):  # For SELL Stop-Loss
+                print(f"Stop loss triggered for ticker:{ticker} action:{action } squareoff:{squareoff_price} last:{last_price}")
                 order_details = OrderRequest(
                                 ticker=ticker,
                                 type="MARKET",
@@ -300,32 +303,25 @@ async def stop_loss_square_off_ticker(auth: AuthConfig, tender_id: int, ticker: 
                             )
                 chunk_order(auth=auth, order_details=order_details)
                 quantity = 0 
-                print(f"Stop loss for {action} Tender-{id} ticker {ticker}")
-            # As last_price is larger than vwap price, sell in batches and keep track of remaining quantity
-            elif last_price > vwap_price:
-                if quantity < batch_size:
-                    order_details = OrderRequest(
-                                ticker=ticker,
-                                type="MARKET",
-                                quantity=quantity,
-                                action=action,
-                                dry_run=0
-                            )
-                    quantity = 0
-                else:
-                    order_details = OrderRequest(
-                                    ticker=ticker,
-                                    type="MARKET",
-                                    quantity=batch_size,
-                                    action=action,
-                                    dry_run=0
-                                )        
-                    quantity -= batch_size
+                print(f"Stop loss for {action} Tender-{tender_id} ticker {ticker}")
+            # As last_price is larger than squareoff price, sell in batches and keep track of remaining quantity
+            elif last_price >= squareoff_price:
+                sell_quantity = min(quantity, batch_size)
+                order_details = OrderRequest(
+                            ticker=ticker,
+                            type="MARKET",
+                            quantity=sell_quantity,
+                            action=action,
+                            dry_run=0
+                        )
+                quantity = max(0, quantity - sell_quantity)
+                print(f"order detail {order_details}")
                 post_order(auth, order_details)
-                print(f"Batch {action} Tender-{id} ticker {ticker}")
+                print(f"Batch {action} Tender-{tender_id} ticker {ticker}")
         else:
             # Stop loss so BUY all remaining quantity that you did SELL earlier
-            if vwap_price * loss_percent >= last_price - vwap_price:
+            if last_price >= squareoff_price * (1 + loss_percent):
+                print(f"Stop loss triggered for ticker:{ticker} action:{action } squareoff:{squareoff_price} last:{last_price}")
                 order_details = OrderRequest(
                                 ticker=ticker,
                                 type="MARKET",
@@ -335,31 +331,23 @@ async def stop_loss_square_off_ticker(auth: AuthConfig, tender_id: int, ticker: 
                             )
                 chunk_order(auth=auth, order_details=order_details)
                 quantity = 0 
-                print(f"Stop loss for {action} Tender-{id} ticker {ticker}")
-            # As last_price is lesser than vwap price, BUY in batches and keep track of remaining quantity
-            elif action == "BUY" and last_price < vwap_price:
-                if quantity < batch_size:
-                    order_details = OrderRequest(
-                                ticker=ticker,
-                                type="MARKET",
-                                quantity=quantity,
-                                action=action,
-                                dry_run=0
-                            )
-                else:        
-                    order_details = OrderRequest(
-                                    ticker=ticker,
-                                    type="MARKET",
-                                    quantity=batch_size,
-                                    action=action,
-                                    dry_run=0
-                                )        
-                    quantity -= batch_size
+                print(f"Stop loss for {action} Tender-{tender_id} ticker {ticker}")
+            # As last_price is lesser than squareoff price, BUY in batches and keep track of remaining quantity
+            elif last_price <= squareoff_price:
+                buy_quantity = min(quantity, batch_size)
+                order_details = OrderRequest(
+                            ticker=ticker,
+                            type="MARKET",
+                            quantity=buy_quantity,
+                            action=action,
+                            dry_run=0
+                        )
+                quantity = max(0, quantity - buy_quantity)
+                print(f"order detail {order_details}")
                 post_order(auth, order_details)
-                print(f"Batch {action} Tender-{id} ticker {ticker}")
-        time.sleep(0.5)
+                print(f"Batch {action} Tender-{tender_id} ticker {ticker}")
+        await asyncio.sleep(0.5)
     print(f"Tender-{tender_id} ${ticker} was squared off")
-
 
 def query_order_details(auth: AuthConfig, order_id:int):
     """Queries specific order details."""

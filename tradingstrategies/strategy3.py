@@ -7,16 +7,29 @@ from dotenv import load_dotenv # type: ignore
 console = Console()
 # Load environment variables from .env file
 load_dotenv()
-
 # Read values from .env
-auth = {
+AUTH = {
     "username": os.getenv("USERNAME"),
     "password": os.getenv("PASSWORD"),
     "server": os.getenv("SERVER"),
     "port": os.getenv("PORT")
 }
+T3_MARKET_DEPTH_POINTS = int(os.getenv("T3_MARKET_DEPTH_POINTS"))
+T3_MIN_PROFIT_MARGIN = float(os.getenv("T3_MIN_PROFIT_MARGIN"))
+T3_TRADE_UNTIL_TICK = int(os.getenv("T3_TRADE_UNTIL_TICK"))
+T3_MIN_VWAP_MARGIN =  float(os.getenv("T3_MIN_VWAP_MARGIN"))
+T3_STOP_LOSS_PERCENT = float(os.getenv("T3_STOP_LOSS_PERCENT"))
+T3_BATCH_SIZE = int(os.getenv("T3_BATCH_SIZE"))
 
-number_of_data_points = 20
+print(f"Hyper parameters are\n"+
+      f"T3_MARKET_DEPTH_POINTS:{T3_MARKET_DEPTH_POINTS}\n"+
+      f"T3_MIN_PROFIT_MARGIN:{T3_MIN_PROFIT_MARGIN}\n"+
+      f"T3_TRADE_UNTIL_TICK:{T3_TRADE_UNTIL_TICK}\n"+
+      f"T3_MIN_VWAP_MARGIN:{T3_MIN_VWAP_MARGIN}\n"+
+      f"T3_MIN_VWAP_MARGIN:{T3_MIN_VWAP_MARGIN}\n"
+      f"T3_STOP_LOSS_PERCENT:{T3_STOP_LOSS_PERCENT}\n"+
+      f"T3_BATCH_SIZE:{T3_BATCH_SIZE}")
+
 # Function to calculate VWAP (Volume-Weighted Average Price)
 def calculate_vwap(price_volume_list):
     total_volume = sum(v for _, v in price_volume_list)
@@ -26,10 +39,10 @@ def calculate_vwap(price_volume_list):
 
 # Function to generate the Market Depth table
 def generate_market_depth(ticker: str):
-    order_book = apis.query_security_order_book(auth,ticker,number_of_data_points)
+    order_book = apis.query_security_order_book(AUTH,ticker,T3_MARKET_DEPTH_POINTS)
 
-    bids = sorted(order_book["bids"], key=lambda x: x['price'], reverse=True)[:number_of_data_points]  # Top number_of_data_points bid levels
-    asks = sorted(order_book["asks"], key=lambda x: x['price'])[:number_of_data_points]  # Top number_of_data_points ask levels
+    bids = sorted(order_book["bids"], key=lambda x: x['price'], reverse=True)[:T3_MARKET_DEPTH_POINTS]  # Top number_of_data_points bid levels
+    asks = sorted(order_book["asks"], key=lambda x: x['price'])[:T3_MARKET_DEPTH_POINTS]  # Top number_of_data_points ask levels
 
     # Calculate cumulative volumes & VWAP
     cumulative_bid_vol = 0
@@ -48,7 +61,7 @@ def generate_market_depth(ticker: str):
     table.add_column("Cum Ask Vol", justify="right")
     table.add_column("AskVWAP", justify="right")
 
-    for i in range(number_of_data_points):
+    for i in range(T3_MARKET_DEPTH_POINTS):
         # Extract bid data
         bid_price = bids[i]["price"] if i < len(bids) else 0
         bid_volume = bids[i]["quantity"] if i < len(bids) else 0
@@ -75,7 +88,7 @@ def generate_market_depth(ticker: str):
 def generate_signal(ticker: str, price: float, action: str, quantity: int, margin: float =0.0):
     # Generate the market depth table
     market_depth_table = generate_market_depth(ticker)
-    console.print(market_depth_table)
+    # console.print(market_depth_table)
 
     # Convert generator to list
     bid_vwap_list = [float(cell) for cell in market_depth_table.columns[0].cells]
@@ -119,29 +132,52 @@ def generate_signal(ticker: str, price: float, action: str, quantity: int, margi
 
     return (False, -1)
 
-# List of tickers you want to generate separate tables for
-tickers = ["CRZY", "TAME"]
+async def main():
+    while True:
+        tender_response = []
+        if apis.get_current_tick(AUTH) <= T3_TRADE_UNTIL_TICK:
+            tender_response = apis.query_tenders(AUTH)
+            if tender_response:
+                print(f"Details of tender received is: \n{tender_response}")
 
-# Live updating Market Depth tables for each ticker
-while True:
-    tender_response = []
-    # accept no tenders after the mantioned tick value
-    if apis.get_current_tick(auth) <= int(os.getenv("T3_TRADE_UNTIL_TICK")):
-        tender_response = apis.query_tenders(auth)
-        if tender_response:
-            print(tender_response)
-    for tender in tender_response:
-        signal_response = generate_signal(tender["ticker"], tender["price"], tender["action"], tender["quantity"], float(os.getenv("T3_MIN_PROFIT_MARGIN")))
-        action = "BUY" if tender["action"] == "BUY" else "SELL"
-        print(f"Signal is {signal_response}")
-        if signal_response[0]:
-            tender_response = apis.post_tender(auth, tender['tender_id'], tender['price'])
-            if tender_response["success"]:
-                while not apis.is_tender_processed(auth, tender["ticker"]):
-                    time.sleep(0.1)
-                    print("waiting for tender to be processed")
-                asyncio.create_task(apis.stop_loss_square_off_ticker(auth, tender["tender_id"], tender["ticker"], signal_response[1], tender["quantity"], action, loss_percent=0.1, batch_size=5000))             
-                apis.instant_square_off_ticker(auth, tender["ticker"])
-        else:
-            print(f"Tender declined: {apis.decline_tender(auth, tender['tender_id'])}")
-    time.sleep(1)
+        for tender in tender_response:
+            signal_response = generate_signal(
+                tender["ticker"], tender["price"], tender["action"], tender["quantity"],
+                T3_MIN_VWAP_MARGIN
+            )
+            # reverse the action to that of tender, as we need to square off 
+            squreoff_action = "SELL" if tender["action"] == "BUY" else "BUY"
+            print(f"Signal analysed: \n{signal_response}")
+
+            if signal_response[0]:
+                securities_data = apis.query_securities(AUTH)
+                total_position = 0
+                for security in securities_data:
+                    total_position += abs(security["position"])
+                if total_position + tender["quantity"] > 100000:
+                    print(f"Cannot accept this tender ${tender} without squaring off earlier ones")
+                    print(f"Tender declined: {apis.decline_tender(AUTH, tender['tender_id'])}")
+                    break
+                tender_response = apis.post_tender(AUTH, tender['tender_id'], tender['price'])
+                print(f"Tender accepted: {tender_response}")
+                if tender_response["success"]:
+                    while not apis.is_tender_processed(AUTH, tender["ticker"]):
+                        await asyncio.sleep(0.1)  # Use async sleep
+                        print("waiting for tender to be processed")
+
+                    squreoff_price = tender["price"] - T3_MIN_PROFIT_MARGIN if squreoff_action == "BUY" else tender["price"] + T3_MIN_PROFIT_MARGIN
+                    # Schedule async task properly
+                    # asyncio.create_task(
+                    #     apis.stop_loss_square_off_ticker(AUTH, tender["tender_id"], tender["ticker"],
+                    #                                      squreoff_price, tender["quantity"], squreoff_action,
+                    #                                      loss_percent=T3_STOP_LOSS_PERCENT, batch_size=T3_BATCH_SIZE)
+                    # )
+                    # Uncomment this below line if you are choosing this strategy, and comment earlier line
+                    apis.instant_square_off_ticker(AUTH, tender["ticker"],T3_BATCH_SIZE)             
+            else:
+                print(f"Tender declined: {apis.decline_tender(AUTH, tender['tender_id'])}")
+
+        await asyncio.sleep(1)  # Use async sleep
+
+# Run the event loop properly
+asyncio.run(main())

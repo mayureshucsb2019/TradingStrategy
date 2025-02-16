@@ -2,7 +2,7 @@ import os, sys, time
 from utility import pretty_print
 from vwap_strategy import VWAPStrategy
 from vwap_models import TradeConfig, TradeAction
-from models import OrderStatus, OHLCParams
+from models import OrderStatus, OHLCParams, TimeSalesParams
 import apis
 from dotenv import load_dotenv # type: ignore
 
@@ -32,8 +32,17 @@ auth = {
 # case_data = apis.query_asset_history(auth)
 # pretty_print(case_data)
 
-securities_data = apis.query_securities(auth,"CRZY")
-print(securities_data)
+# securities_data = apis.query_securities(auth,"CRZY")
+# print(securities_data)
+
+order_detail = apis.query_orders(auth, OrderStatus.TRANSACTED)
+print(order_detail)
+order_detail = apis.query_orders(auth, OrderStatus.OPEN)
+print(order_detail)
+order_detail = apis.query_orders(auth, OrderStatus.CANCELLED)
+print(order_detail)
+order_detail = apis.query_orders(auth)
+print(order_detail)
 
 # print("Securities book data")
 # while True:
