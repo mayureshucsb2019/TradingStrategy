@@ -333,7 +333,7 @@ async def limit_square_off_ticker_randomized_price(
     batch_size: int = 10000,
 ):
     while True:
-        random_choice = random.choice([0, 1, 2])
+        random_choice = random.choice([0, 0.05, 0.1, 0.15, 0.2])
         # TODO: if error happens then this computation cannot be recovered back, add new logic @mayuresh
         if quantity >= batch_size:
             order_details = OrderRequest(
@@ -344,9 +344,9 @@ async def limit_square_off_ticker_randomized_price(
                     None
                     if random_choice == 0
                     else (
-                        price - 0.1 * random_choice
+                        price - random_choice
                         if action == "BUY"
-                        else price + 0.1 * random_choice
+                        else price + random_choice
                     )
                 ),
                 action=action,
@@ -358,7 +358,15 @@ async def limit_square_off_ticker_randomized_price(
                 ticker=ticker,
                 type="MARKET" if random_choice == 0 else "LIMIT",
                 quantity=quantity,
-                price=None if random_choice == 0 else price - 0.1 * random_choice,
+                price=(
+                    None
+                    if random_choice == 0
+                    else (
+                        price - random_choice
+                        if action == "BUY"
+                        else price + random_choice
+                    )
+                ),
                 action=action,
                 dry_run=0,
             )
