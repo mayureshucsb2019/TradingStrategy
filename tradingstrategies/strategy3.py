@@ -220,7 +220,7 @@ async def main():
                     if abs(net_position) > 100000 or gross_position > 250000:
                         print(f"Cannot accept this tender at this time")
                         break
-                    securities_data = await apis.query_securities(AUTH, ticker)
+                    securities_data = await apis.query_securities(AUTH, tender["ticker"])
                     print(f"Queried intial position {securities_data[0]['position']}")
                     tender_response = await apis.post_tender(
                         AUTH, tender["tender_id"], tender["price"]
