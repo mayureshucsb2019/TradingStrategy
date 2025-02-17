@@ -6,6 +6,7 @@ from vwap_models import TradeConfig
 import time
 import sys
 
+
 class VWAPStrategy:
     def __init__(self, config: TradeConfig):
         # Authentication details
@@ -29,7 +30,9 @@ class VWAPStrategy:
 
         # Calculate trade size and time between trades
         self.trade_size = self.number_of_shares_to_fill // self.number_of_trades
-        self.time_between_trades = int((self.ticks_per_period - self.current_tick) / self.number_of_trades)
+        self.time_between_trades = int(
+            (self.ticks_per_period - self.current_tick) / self.number_of_trades
+        )
 
         # Adjust if there's only one trade
         if self.time_between_trades <= 1:
@@ -41,19 +44,21 @@ class VWAPStrategy:
         # For last trade, get left over value, as some might be fractional
         if self.number_of_trades != 1 and trade_index == self.number_of_trades - 1:
             quantity = self.number_of_shares_to_fill - trade_index * self.trade_size
-        
+
         # Order parameters
         order_details = OrderRequest(
             ticker=self.ticker,
             type="MARKET",
             quantity=quantity,
             action=self.action,
-            dry_run=0
+            dry_run=0,
         )
 
         # Post order
         OrderResponse.model_validate(apis.post_order(self.auth, order_details))
-        print(f"Executed trade {trade_index + 1} for {self.ticker} with {quantity} shares ....... \n")
+        print(
+            f"Executed trade {trade_index + 1} for {self.ticker} with {quantity} shares ....... \n"
+        )
 
         # Query order details
         order_detail = apis.query_orders(self.auth, OrderStatus.TRANSACTED)
@@ -67,7 +72,7 @@ class VWAPStrategy:
     def start(self, is_order_detail_allowed=True):
         if not self.is_trading_active():
             sys.stdout.write(f"\rTrading is not active\n")
-            return 
+            return
 
         for i in range(0, self.number_of_trades):
             self.execute_trade(i, is_order_detail_allowed)

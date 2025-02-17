@@ -1,9 +1,11 @@
 from pydantic import BaseModel, Field, model_validator
 from enum import Enum
 
+
 class TradeAction(str, Enum):
     BUY = "BUY"
     SELL = "SELL"
+
 
 class TradeConfig(BaseModel):
     username: str
@@ -18,7 +20,11 @@ class TradeConfig(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def check_missing_fields(cls, values):
-        missing_fields = [field for field in cls.__annotations__ if field not in values or values[field] is None]
+        missing_fields = [
+            field
+            for field in cls.__annotations__
+            if field not in values or values[field] is None
+        ]
         if missing_fields:
             raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
         return values

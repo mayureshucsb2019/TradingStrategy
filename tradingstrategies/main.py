@@ -4,7 +4,7 @@ from vwap_strategy import VWAPStrategy
 from vwap_models import TradeConfig, TradeAction
 from models import OrderStatus, OHLCParams, TimeSalesParams
 import apis
-from dotenv import load_dotenv # type: ignore
+from dotenv import load_dotenv  # type: ignore
 
 # Load environment variables from .env file
 load_dotenv()
@@ -14,7 +14,7 @@ auth = {
     "username": os.getenv("USERNAME"),
     "password": os.getenv("PASSWORD"),
     "server": os.getenv("SERVER"),
-    "port": os.getenv("PORT")
+    "port": os.getenv("PORT"),
 }
 # print(auth)
 # case_data = apis.query_case_status(auth)
@@ -55,7 +55,7 @@ print(order_detail)
 #     bid_vwap_list = []
 #     ask_vwap_list = []
 
-#     for i in range(len(bids)):        
+#     for i in range(len(bids)):
 #         print(bids[0])
 #         print(asks[0])
 #         print()
@@ -72,8 +72,8 @@ print(order_detail)
 #     securities_data = apis.query_securities(auth)
 #     for x in securities_data:
 #     # security_tickers.append(x.ticker)
-#         sys.stdout.write(f"{x['ticker']} {x['position']} {x['last']} {x['bid']} {x['bid_size']} {x['ask']} {x['ask_size']} {x['volume']}\n")    
-#     sys.stdout.write("\n")    
+#         sys.stdout.write(f"{x['ticker']} {x['position']} {x['last']} {x['bid']} {x['bid_size']} {x['ask']} {x['ask_size']} {x['volume']}\n")
+#     sys.stdout.write("\n")
 #     time.sleep(1)
 #     sys.stdout.flush()
 
@@ -86,10 +86,10 @@ print(order_detail)
 
 # # Example VWAP Usage:
 # config = TradeConfig(
-#     username=os.getenv("USERNAME"),  
+#     username=os.getenv("USERNAME"),
 #     password=os.getenv("PASSWORD"),
 #     server=os.getenv("SERVER"),
-#     port=int(os.getenv("VWAP_PORT")),  
+#     port=int(os.getenv("VWAP_PORT")),
 #     ticker=os.getenv("VWAP_TICKER"),
 #     number_of_shares_to_fill=int(os.getenv("VWAP_SHARES_TO_FILL")),
 #     number_of_trades=int(os.getenv("VWAP_TRADES")),
