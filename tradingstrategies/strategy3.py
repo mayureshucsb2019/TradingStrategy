@@ -158,9 +158,16 @@ async def main():
     end_of_time_hit = False
     while True:
         tender_response = []
-        if await apis.get_current_tick(AUTH) <= T3_TRADE_UNTIL_TICK:
+        current_tick = await apis.get_current_tick(AUTH)
+        if current_tick == 0:
+            end_of_time_hit = False
+        if current_tick <= T3_TRADE_UNTIL_TICK:
+            print(f"Current tick is {current_tick}")
             tender_response = await apis.query_tenders(AUTH)
         else:
+            print(
+                f"Current tick is {current_tick} more than cutoff time {T3_TRADE_UNTIL_TICK} end_of_time_hit:{end_of_time_hit}"
+            )
             if not end_of_time_hit:
                 print("End of period hit, squaring off all open positions")
                 # First cancel all open orders
@@ -184,45 +191,45 @@ async def main():
                 print(f"Signal analysed: \n{signal_response}")
                 if signal_response[0]:
                     securities_data = await apis.query_securities(AUTH)
-                    security_position = {}
                     net_position = 0
                     gross_position = 0
+                    security_position = {}
+                    # Initialize security_position from securities_data
                     for security in securities_data:
-                        security_position[tender["ticker"]] = security["position"]
-                        if tender["ticker"] == security["ticker"]:
-                            tender_quantity = (
-                                -1 * tender["quantity"]
-                                if tender["action"] == "SELL"
-                                else tender["quantity"]
-                            )
-                            security_position[tender["ticker"]] += tender_quantity
-                        net_position += security_position[tender["ticker"]]
-                        gross_position += abs(security_position[tender["ticker"]])
-                    if net_position > 100000 or gross_position > 250000:
-                        print(
-                            f"Cannot accept this tender ${tender} net_position:{net_position} gross_position:{gross_position}"
-                        )
-                        print(f"Waiting for favorable condition to accept tender")
+                        security_position[security["ticker"]] = security["position"]
+
+                    tender_quantity = (
+                        -1 * tender["quantity"]
+                        if tender["action"] == "SELL"
+                        else tender["quantity"]
+                    )
+                    security_position[tender["ticker"]] += tender_quantity
+
+                    for ticker, position in security_position.items():
+                        net_position += position
+                        gross_position += abs(position)
+
+                    print(
+                        f"net_position:{net_position} gross_position:{gross_position}"
+                    )
+                    if abs(net_position) > 100000 or gross_position > 250000:
+                        print(f"Cannot accept this tender at this time")
                         break
                     tender_response = await apis.post_tender(
                         AUTH, tender["tender_id"], tender["price"]
                     )
                     print(f"Tender accepted: {tender_response}")
                     if tender_response["success"]:
-                        is_tender_processed_count = 0
-                        is_tender_processed = await apis.is_tender_processed(
-                            AUTH, tender["ticker"]
+                        securities_data = await apis.query_securities(AUTH, ticker)
+                        print(
+                            f"Queried intial position {securities_data[0]['position']}"
                         )
-                        while not is_tender_processed:
-                            await asyncio.sleep(0.1)
-                            is_tender_processed_count += 1
-                            print("waiting for tender to be processed")
-                            is_tender_processed = await apis.is_tender_processed(
-                                AUTH, tender["ticker"]
-                            )
-                            if is_tender_processed_count == 10:
-                                break
-
+                        is_tender_processed = await apis.is_tender_processed(
+                            AUTH,
+                            tender["ticker"],
+                            tender["quantity"],
+                            securities_data[0]["position"],
+                        )
                         profit_price = (
                             tender["price"] - T3_MIN_PROFIT_MARGIN
                             if squareoff_action == "BUY"

@@ -503,7 +503,6 @@ async def cancel_all_open_order(auth: AuthConfig):
                 await cancel_order(auth, order["order_id"])
                 print(f"Cancelled {i} {order['order_id']} of {len(orders)} orders")
             except Exception as e:
-                # Catch any other errors that occur
                 print(
                     f"An error occurred while cancelling the order {i} {order['order_id']} of {len(orders)} orders: {e}"
                 )
@@ -541,10 +540,28 @@ async def decline_tender(auth: AuthConfig, tender_id: int):
         return None
 
 
-async def is_tender_processed(auth: AuthConfig, ticker: str):
+async def is_tender_processed(
+    auth: AuthConfig, ticker: str, quantity: int, initial_position: int
+):
     """Asynchronously checks if a tender has been processed."""
-    securities_data = await query_securities(auth, ticker)
-    return securities_data[0]["position"] != 0.0 if securities_data else False
+    processing_count = 0
+    while processing_count < 5:
+        try:
+            securities_data = await query_securities(auth, ticker)
+            print(
+                f"Checking if tender processed, quantity:{quantity} difference:{abs(abs(initial_position) - abs(securities_data[0]['position']))} initial_position:{initial_position} current_position:{securities_data[0]['position']} "
+            )
+        except Exception as e:
+            print(f"An error occurred while querying security {ticker}: {e}")
+        if abs(abs(initial_position) - abs(securities_data[0]["position"])) >= int(
+            0.6 * abs(quantity)
+        ):
+            print(f"Tender has been processed")
+            return True
+        await asyncio.sleep(0.2)
+        processing_count += 1
+    print(f"Tender wasn't processed")
+    return False
 
 
 async def query_tenders(auth: AuthConfig):
