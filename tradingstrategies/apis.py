@@ -1,4 +1,4 @@
-import httpx, asyncio
+import httpx, asyncio, random
 from utility import make_encoded_header
 from typing import Optional
 from tradingstrategies.models import (
@@ -321,7 +321,50 @@ async def limit_square_off_ticker(
         dry_run=0,
     )
     await chunk_order(auth, order_details, batch_size)
-    print(f"Trade for {quantity} {ticker} placed at limit of {price}")
+    print(f"Trade for {action} {quantity} {ticker} placed at limit of {price}")
+
+
+async def limit_square_off_ticker_randomized_price(
+    auth: AuthConfig,
+    ticker: str,
+    action: str,
+    price: int,
+    quantity: int,
+    batch_size: int = 10000,
+):
+    while True:
+        random_choice = random.choice([0, 1, 2])
+        # TODO: if error happens then this computation cannot be recovered back, add new logic @mayuresh
+        if quantity >= batch_size:
+            order_details = OrderRequest(
+                ticker=ticker,
+                type="MARKET" if random_choice == 0 else "LIMIT",
+                quantity=batch_size,
+                price=None if random_choice == 0 else price - 0.1 * random_choice,
+                action=action,
+                dry_run=0,
+            )
+            quantity -= batch_size
+        elif quantity > 0 and quantity < batch_size:
+            order_details = OrderRequest(
+                ticker=ticker,
+                type="MARKET" if random_choice == 0 else "LIMIT",
+                quantity=quantity,
+                price=None if random_choice == 0 else price - 0.1 * random_choice,
+                action=action,
+                dry_run=0,
+            )
+            quantity = 0
+        else:
+            break
+        try:
+            await post_order(auth, order_details)
+            print(
+                f"Trade for {order_details.quantity} {ticker} placed at  {order_details.price}"
+            )
+        except Exception as e:
+            print(f"An error occurred while posting the order {order_details}: {e}")
+        await asyncio.sleep(0.1)
 
 
 async def stop_loss_square_off_ticker(
@@ -456,7 +499,7 @@ async def cancel_all_open_order(auth: AuthConfig):
                 print(
                     f"An error occurred while cancelling the order {i} {order['order_id']} of {len(orders)} orders: {e}"
                 )
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.1)
         orders = await query_orders(auth, OrderStatus.OPEN)
     print("Cancelled all open orders")
 

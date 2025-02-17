@@ -220,7 +220,7 @@ async def main():
                             is_tender_processed = await apis.is_tender_processed(
                                 AUTH, tender["ticker"]
                             )
-                            if is_tender_processed_count == 5:
+                            if is_tender_processed_count == 10:
                                 break
 
                         profit_price = (
@@ -245,16 +245,27 @@ async def main():
                             #     )
                             # )
 
+                            # asyncio.create_task(
+                            #     apis.limit_square_off_ticker(
+                            #         AUTH,
+                            #         tender["ticker"],
+                            #         squareoff_action,
+                            #         (
+                            #             tender["price"] + T3_MIN_PROFIT_MARGIN
+                            #             if squareoff_action == "SELL"
+                            #             else tender["price"] - T3_MIN_PROFIT_MARGIN
+                            #         ),
+                            #         tender["quantity"],
+                            #         T3_SQUARE_OFF_BATCH_SIZE,
+                            #     )
+                            # )
+
                             asyncio.create_task(
-                                apis.limit_square_off_ticker(
+                                apis.limit_square_off_ticker_randomized_price(
                                     AUTH,
                                     tender["ticker"],
                                     squareoff_action,
-                                    (
-                                        tender["price"] + T3_MIN_PROFIT_MARGIN
-                                        if squareoff_action == "SELL"
-                                        else tender["price"] - T3_MIN_PROFIT_MARGIN
-                                    ),
+                                    tender["price"],
                                     tender["quantity"],
                                     T3_SQUARE_OFF_BATCH_SIZE,
                                 )
