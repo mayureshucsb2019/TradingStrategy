@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, Literal
 from enum import Enum
 
@@ -29,14 +29,14 @@ class OrderRequest(BaseModel):
     price: Optional[float] = Field(None, title="Price for LIMIT Orders")
     dry_run: int = Field(0, title="Dry Run Mode (0=execute, 1=simulate)")
 
-    @field_validator("price")
-    def check_price(cls, value, values):
+    @model_validator(mode="after")
+    def check_price(cls, model):
         """
         Ensures price is provided for LIMIT orders.
         """
-        if values.get("type") == "LIMIT" and value is None:
+        if model.type == "LIMIT" and model.price is None:
             raise ValueError("Price must be specified for LIMIT orders.")
-        return value
+        return model
 
 
 class OrderResponse(BaseModel):

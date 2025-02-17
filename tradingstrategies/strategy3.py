@@ -163,6 +163,8 @@ async def main():
         else:
             if not end_of_time_hit:
                 print("End of period hit, squaring off all open positions")
+                # First cancel all open orders
+                await apis.cancel_all_open_order(AUTH)
                 asyncio.create_task(
                     apis.market_square_off_all_tickers(AUTH, T3_SQUARE_OFF_BATCH_SIZE)
                 )
@@ -207,11 +209,19 @@ async def main():
                     )
                     print(f"Tender accepted: {tender_response}")
                     if tender_response["success"]:
-                        while not await apis.is_tender_processed(
+                        is_tender_processed_count = 0
+                        is_tender_processed = await apis.is_tender_processed(
                             AUTH, tender["ticker"]
-                        ):
+                        )
+                        while not is_tender_processed:
                             await asyncio.sleep(0.1)
+                            is_tender_processed_count += 1
                             print("waiting for tender to be processed")
+                            is_tender_processed = await apis.is_tender_processed(
+                                AUTH, tender["ticker"]
+                            )
+                            if is_tender_processed_count == 5:
+                                break
 
                         profit_price = (
                             tender["price"] - T3_MIN_PROFIT_MARGIN
@@ -223,17 +233,33 @@ async def main():
                             if squareoff_action == "BUY"
                             else tender["price"] * (1 - T3_STOP_LOSS_PERCENT)
                         )
+                        if is_tender_processed:
+                            # asyncio.create_task(
+                            #     apis.stop_loss_square_off_ticker(AUTH, tender["tender_id"], tender["ticker"],
+                            #                                     profit_price, tender["quantity"], squareoff_action,
+                            #                                     stoploss_price=stoploss_price, batch_size=T3_BATCH_SIZE, square_off_time=T3_TRADE_UNTIL_TICK)
+                            # )
+                            # asyncio.create_task(
+                            #     apis.market_square_off_ticker(
+                            #         AUTH, tender["ticker"], T3_SQUARE_OFF_BATCH_SIZE
+                            #     )
+                            # )
 
-                        # asyncio.create_task(
-                        #     apis.stop_loss_square_off_ticker(AUTH, tender["tender_id"], tender["ticker"],
-                        #                                     profit_price, tender["quantity"], squareoff_action,
-                        #                                     stoploss_price=stoploss_price, batch_size=T3_BATCH_SIZE, square_off_time=T3_TRADE_UNTIL_TICK)
-                        # )
-                        asyncio.create_task(
-                            apis.market_square_off_ticker(
-                                AUTH, tender["ticker"], T3_SQUARE_OFF_BATCH_SIZE
+                            asyncio.create_task(
+                                apis.limit_square_off_ticker(
+                                    AUTH,
+                                    tender["ticker"],
+                                    squareoff_action,
+                                    (
+                                        tender["price"] + T3_MIN_PROFIT_MARGIN
+                                        if squareoff_action == "SELL"
+                                        else tender["price"] - T3_MIN_PROFIT_MARGIN
+                                    ),
+                                    tender["quantity"],
+                                    T3_SQUARE_OFF_BATCH_SIZE,
+                                )
                             )
-                        )
+
                 else:
                     print(f"Waiting for favorable condition to accept tender")
         await asyncio.sleep(1)

@@ -304,6 +304,26 @@ async def market_square_off_ticker(
     print(f"Trade for {ticker} squared off")
 
 
+async def limit_square_off_ticker(
+    auth: AuthConfig,
+    ticker: str,
+    action: str,
+    price: int,
+    quantity: int,
+    batch_size: int = 10000,
+):
+    order_details = OrderRequest(
+        ticker=ticker,
+        type="LIMIT",
+        quantity=quantity,
+        action=action,
+        price=price,
+        dry_run=0,
+    )
+    await chunk_order(auth, order_details, batch_size)
+    print(f"Trade for {quantity} {ticker} placed at limit of {price}")
+
+
 async def stop_loss_square_off_ticker(
     auth: AuthConfig,
     tender_id: int,
@@ -420,6 +440,25 @@ async def cancel_order(auth: AuthConfig, order_id: int):
     except httpx.RequestError as e:
         print(f"Error cancelling order {order_id}: {e}")
         return None
+
+
+async def cancel_all_open_order(auth: AuthConfig):
+    orders = await query_orders(auth, OrderStatus.OPEN)
+    print(f"Open orders are {orders}")
+    while orders:
+        for i, order in enumerate(orders):
+            try:
+                # Attempt to cancel the order
+                await cancel_order(auth, order["order_id"])
+                print(f"Cancelled {i} {order['order_id']} of {len(orders)} orders")
+            except Exception as e:
+                # Catch any other errors that occur
+                print(
+                    f"An error occurred while cancelling the order {i} {order['order_id']} of {len(orders)} orders: {e}"
+                )
+            await asyncio.sleep(0.2)
+        orders = await query_orders(auth, OrderStatus.OPEN)
+    print("Cancelled all open orders")
 
 
 async def post_tender(auth: AuthConfig, tender_id: int, price: float):
