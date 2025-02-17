@@ -1,11 +1,7 @@
-import requests,time, httpx
+import httpx, asyncio
 from utility import make_encoded_header
 from typing import Optional
 from tradingstrategies.models import AuthConfig, CaseDataResponse, OrderRequest, OHLCParams, TimeSalesParams, OrderStatus
-import asyncio
-
-ticker_locks = {}
-import httpx
 
 async def get_current_tick(auth: AuthConfig):
     """Asynchronously gets the current tick from the case status."""
@@ -239,26 +235,27 @@ async def post_order(auth: AuthConfig, order_details: OrderRequest):
         print(f"Error placing order: {e}")
         return None
 
-async def chunk_order(auth: AuthConfig, order_details: OrderRequest):
+async def chunk_order(auth: AuthConfig, order_details: OrderRequest, batch_size: int = 10000):
     quantity = order_details.quantity
     while True:
-        if quantity >= 10000:
-            order_details.quantity = 10000
-            quantity -= 10000
-        elif quantity > 0 and quantity < 10000:
+        if quantity >= batch_size:
+            order_details.quantity = batch_size
+            quantity -= batch_size
+        elif quantity > 0 and quantity < batch_size:
             order_details.quantity = quantity
             quantity = 0
         else:
             break
         await post_order(auth, order_details)
+        await asyncio.sleep(0.1)
 
 async def instant_square_off_all_tickers(auth, batch_size: int = 10000):
-    securities_data = query_securities(auth)  # Fetch all tickers automatically
-    for security in securities_data:
+    securities_data = await query_securities(auth)  # Fetch all tickers automatically
+    for security in securities_data:        
         asyncio.create_task(instant_square_off_ticker(auth, security["ticker"], batch_size))
 
 async def instant_square_off_ticker(auth: AuthConfig, ticker: str, batch_size: int = 10000):
-    securities_data = query_securities(auth, ticker)
+    securities_data = await query_securities(auth, ticker)
     while int(securities_data[0]["position"]) != 0:
         if securities_data[0]["position"] > 0 :
             action = "SELL"
@@ -277,23 +274,21 @@ async def instant_square_off_ticker(auth: AuthConfig, ticker: str, batch_size: i
                         action=action,
                         dry_run=0
                     )        
-        post_order(auth, order_details)
-        securities_data = query_securities(auth, ticker)
+        await post_order(auth, order_details)
+        await asyncio.sleep(0.2)
+        securities_data = await query_securities(auth, ticker)
     print(f"Trade for {ticker} squared off")
 
 async def stop_loss_square_off_ticker(auth: AuthConfig, tender_id: int, ticker: str, profit_price: float, quantity: int, action: str, stoploss_price: float, batch_size: int = 5000, square_off_time: int = 297):
     print(f"Started process for Tender-{tender_id} ticker:{ticker} action:{action } profit_price:{profit_price}")
     await asyncio.sleep(1)
-    if ticker not in ticker_locks:
-        ticker_locks[ticker] = asyncio.Lock()  # Create a lock only if it doesn't exist
-        print(f"Lock created for Tender-{tender_id} ticker {ticker}")
-    else:
-        print(f"Lock exists for Tender-{tender_id} ticker {ticker}")
     while quantity > 0:        
-        if get_current_tick(auth) >= square_off_time: 
+        if await get_current_tick(auth) >= square_off_time: 
+            print(f"square off time hit, getting out of while loop")
             break
         # Get the last price of ticker to make a stop loss decision
-        last_price = query_securities(auth,ticker)[0]["last"]   
+        securities_data = await query_securities(auth, ticker)
+        last_price = securities_data[0]["last"]   
         # print(f"Last price for Tender-{tender_id} ticker:{ticker} action:{action } squareoff:{squareoff_price} last:{last_price}")   
         if action == "SELL":
             # Stop loss so SELL all remaining quantity that you did BUY earlier
@@ -306,7 +301,7 @@ async def stop_loss_square_off_ticker(auth: AuthConfig, tender_id: int, ticker: 
                                 action=action,
                                 dry_run=0
                             )
-                chunk_order(auth=auth, order_details=order_details)
+                await chunk_order(auth=auth, order_details=order_details)
                 quantity = 0 
             # As last_price is larger than squareoff price, sell in batches and keep track of remaining quantity
             elif last_price >= profit_price:
@@ -320,7 +315,7 @@ async def stop_loss_square_off_ticker(auth: AuthConfig, tender_id: int, ticker: 
                         )
                 quantity = max(0, quantity - sell_quantity)
                 # print(f"order detail {order_details}")
-                post_order(auth, order_details)
+                await post_order(auth, order_details)
                 print(f"Batch {action} {sell_quantity} Tender-{tender_id} ticker{ticker} last_price:{last_price}  profit_price:{profit_price}")
         else:
             # Stop loss so BUY all remaining quantity that you did SELL earlier
@@ -333,7 +328,7 @@ async def stop_loss_square_off_ticker(auth: AuthConfig, tender_id: int, ticker: 
                                 action=action,
                                 dry_run=0
                             )
-                chunk_order(auth=auth, order_details=order_details)
+                await chunk_order(auth=auth, order_details=order_details)
                 quantity = 0 
             # As last_price is lesser than squareoff price, BUY in batches and keep track of remaining quantity
             elif last_price <= profit_price:
@@ -347,9 +342,9 @@ async def stop_loss_square_off_ticker(auth: AuthConfig, tender_id: int, ticker: 
                         )
                 quantity = max(0, quantity - buy_quantity)
                 # print(f"order detail {order_details}")
-                post_order(auth, order_details)
+                await post_order(auth, order_details)
                 print(f"Batch {action} {buy_quantity} Tender-{tender_id} ticker {ticker} last_price:{last_price}  profit_price:{profit_price}")
-        print(f"Working on  ticker:{ticker} action:{action } quantity:{quantity} stoploss_price:{stoploss_price} last:{last_price} profit_price:{profit_price}")
+        # print(f"Working on  ticker:{ticker} action:{action } quantity:{quantity} stoploss_price:{stoploss_price} last:{last_price} profit_price:{profit_price}")
         await asyncio.sleep(0.5)
     print(f"Tender-{tender_id} {ticker} was squared off")
 
