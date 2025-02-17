@@ -158,7 +158,12 @@ async def main():
     end_of_time_hit = False
     while True:
         tender_response = []
-        current_tick = await apis.get_current_tick(AUTH)
+        try:
+            current_tick = await apis.get_current_tick(AUTH)
+        except Exception as e:
+            print(f"Unable to get current tick {e}, redo loop")
+            await asyncio.sleep(0.2)
+            continue
         if current_tick == 0:
             end_of_time_hit = False
         if current_tick <= T3_TRADE_UNTIL_TICK:
