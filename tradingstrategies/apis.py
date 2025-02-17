@@ -340,7 +340,15 @@ async def limit_square_off_ticker_randomized_price(
                 ticker=ticker,
                 type="MARKET" if random_choice == 0 else "LIMIT",
                 quantity=batch_size,
-                price=None if random_choice == 0 else price - 0.1 * random_choice,
+                price=(
+                    None
+                    if random_choice == 0
+                    else (
+                        price - 0.1 * random_choice
+                        if action == "BUY"
+                        else price + 0.1 * random_choice
+                    )
+                ),
                 action=action,
                 dry_run=0,
             )
@@ -360,7 +368,7 @@ async def limit_square_off_ticker_randomized_price(
         try:
             await post_order(auth, order_details)
             print(
-                f"Trade for {order_details.quantity} {ticker} placed at  {order_details.price}"
+                f"Trade for {action} {order_details.quantity} {ticker} placed at  {order_details.price}"
             )
         except Exception as e:
             print(f"An error occurred while posting the order {order_details}: {e}")
