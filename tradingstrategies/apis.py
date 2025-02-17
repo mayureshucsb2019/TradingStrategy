@@ -91,7 +91,7 @@ async def query_assets(auth: AuthConfig, ticker: str):
     Returns:
         JSON response from the API if successful, otherwise None.
     """
-    api_endpoint = f"http://{auth["server"]}:{auth["port"]}/v1/assets"
+    api_endpoint = f"http://{auth['server']}:{auth['port']}/v1/assets"
     # Construct query parameters
     params = {"ticker": ticker}
     try:
@@ -228,7 +228,7 @@ async def post_order(auth: AuthConfig, order_details: OrderRequest):
     Returns:
         JSON response from the API if successful, otherwise None.
     """
-    url = f"http://{auth["server"]}:{auth["port"]}/v1/orders"
+    url = f"http://{auth['server']}:{auth['port']}/v1/orders"
 
     # Construct query parameters
     params = {

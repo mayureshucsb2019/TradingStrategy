@@ -13,6 +13,9 @@ class AuthConfig(BaseModel):
     server: str = Field(..., title="Server Address")
     port: int = Field(..., title="Server Port")
 
+    def __getitem__(self, item):
+        return getattr(self, item)
+
 
 class OrderRequest(BaseModel):
     """
