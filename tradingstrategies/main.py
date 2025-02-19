@@ -1,4 +1,4 @@
-import os, sys, time
+import os, sys, time,asyncio
 from utility import pretty_print
 from vwap_strategy import VWAPStrategy
 from vwap_models import TradeConfig, TradeAction
@@ -9,16 +9,21 @@ from dotenv import load_dotenv  # type: ignore
 # Load environment variables from .env file
 load_dotenv()
 
-# Read values from .env
-auth = {
-    "username": os.getenv("USERNAME"),
-    "password": os.getenv("PASSWORD"),
-    "server": os.getenv("SERVER"),
-    "port": os.getenv("PORT"),
-}
-# print(auth)
-# case_data = apis.query_case_status(auth)
-# pretty_print(case_data)
+async def main():
+    auth = {
+        "username": os.getenv("USERNAME"),
+        "password": os.getenv("PASSWORD"),
+        "server": os.getenv("SERVER"),
+        "port": os.getenv("PORT"),
+    }
+    print(auth)
+    
+    case_data = await apis.query_case_status(auth)
+    print(case_data)  # Assuming pretty_print is a function, replace if needed.
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
 # case_data = apis.query_trader_info(auth)
 # pretty_print(case_data)
 # case_data = apis.query_trading_limits(auth)
@@ -41,8 +46,8 @@ auth = {
 # print(order_detail)
 # order_detail = apis.query_orders(auth, OrderStatus.CANCELLED)
 # print(order_detail)
-order_detail = apis.query_securities(auth)
-print(order_detail)
+# order_detail = apis.query_securities(auth)
+# print(order_detail)
 
 # print("Securities book data")
 # while True:
