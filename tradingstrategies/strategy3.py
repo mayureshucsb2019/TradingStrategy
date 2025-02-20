@@ -112,7 +112,7 @@ async def generate_signal(
 ):
     # Generate the market depth table
     market_depth_table = await generate_market_depth(ticker)
-    # console.print(market_depth_table)
+    console.print(market_depth_table)
 
     # Convert generator to list
     bid_vwap_list = [float(cell) for cell in market_depth_table.columns[0].cells]
@@ -271,7 +271,7 @@ async def main():
                             # )
 
                             asyncio.create_task(
-                                apis.limit_square_off_ticker_randomized_price(
+                                apis.limit_square_off_ticker_trend_adjusted_price(
                                     AUTH,
                                     tender["ticker"],
                                     squareoff_action,

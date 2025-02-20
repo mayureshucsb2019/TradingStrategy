@@ -271,7 +271,7 @@ async def chunk_order(
         await post_order(auth, order_details)
         await asyncio.sleep(0.1)
 
-
+# Strategy 
 async def market_square_off_all_tickers(auth, batch_size: int = 10000):
     securities_data = await query_securities(auth)  # Fetch all tickers automatically
     for security in securities_data:
@@ -303,7 +303,7 @@ async def market_square_off_ticker(
         securities_data = await query_securities(auth, ticker)
     print(f"Trade for {ticker} squared off")
 
-
+# Strategy 
 async def limit_square_off_ticker(
     auth: AuthConfig,
     ticker: str,
@@ -323,7 +323,7 @@ async def limit_square_off_ticker(
     await chunk_order(auth, order_details, batch_size)
     print(f"Trade for {action} {quantity} {ticker} placed at limit of {price}")
 
-
+# Mayuresh Strategy
 async def limit_square_off_ticker_randomized_price(
     auth: AuthConfig,
     ticker: str,
@@ -562,7 +562,7 @@ async def is_tender_processed(
         except Exception as e:
             print(f"An error occurred while querying security {ticker}: {e}")
         if abs(abs(initial_position) - abs(securities_data[0]["position"])) >= int(
-            0.6 * abs(quantity)
+            0.5 * abs(quantity)
         ):
             print(f"Tender has been processed")
             return True
